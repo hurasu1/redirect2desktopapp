@@ -1,15 +1,129 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>redirect2desktopapp</title>
-  </head>
-  <body>
-    <main>
-      <h1>redirect2desktopapp</h1>
-      <p>Claude などの Web URL をデスクトップアプリの URL スキームに転送するツールです。</p>
-      <p>使い方と対応サービスについては <a href="https://github.com/hurasu1/redirect2desktopapp">GitHub リポジトリ</a>をご確認ください。</p>
-    </main>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>アプリを開いています</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1d2433; --bg:#f6f7f9; --muted:#5b6474; --link:#2754c5; --box:#e9ecf1; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e6e8ec; --bg:#16191f; --muted:#9aa3b2; --link:#8fb0ff; --box:#232832; } }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg);
+         font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif; }
+  main { width:min(36rem, 100% - 3rem); line-height:1.7; }
+  p { margin:0 0 .75rem; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  a { color:var(--link); }
+  pre { background:var(--box); padding:.75rem 1rem; border-radius:6px; white-space:pre-wrap; word-break:break-all; font:inherit; font-size:.9rem; max-height:12rem; overflow:auto; }
+  button { font:inherit; padding:.5rem 1.1rem; border-radius:6px; border:1px solid var(--muted); background:transparent; color:var(--fg); cursor:pointer; }
+  button:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+  [hidden] { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <p id="msg">開いています…</p>
+  <div id="confirm" hidden>
+    <pre id="preview"></pre>
+    <p><button id="go" type="button">開く</button></p>
+  </div>
+  <p class="muted" id="alt"></p>
+</main>
+<script>
+  // ===================== 設定 =====================
+  // AI（q=プロンプト）: この文言で始まるものだけ確認なしで開く。それ以外は内容を見せてボタンで開く。
+  var TRUSTED_PREFIXES = ["Asanaのタスク", "Notionのページ", "このページ"];
+
+  // Slack のワークスペースID（T から始まる）。分かれば入れておくとチャンネルをアプリで直接開ける。
+  // 空のままだと、Slack 標準の「アプリで開く」ページ経由になる。
+  var SLACK_TEAM_ID = "";
+
+  // ---- AI 系: ?to=xxx&q=プロンプト ----
+  var AI_TARGETS = {
+    claude:        { name: "Claude Desktop", app: function (e) { return "claude://claude.ai/new?q=" + e; },
+                     web: function (e) { return "https://claude.ai/new?q=" + e; } },
+    "claude-web":  { name: "Claude（ブラウザ）", app: function (e) { return "https://claude.ai/new?q=" + e; } },
+    chatgpt:       { name: "ChatGPT Desktop", app: function (e) { return "codex://new?prompt=" + e; },
+                     web: function (e) { return "https://chatgpt.com/?q=" + e; } },
+    "chatgpt-web": { name: "ChatGPT（ブラウザ）", app: function (e) { return "https://chatgpt.com/?q=" + e; } }
+  };
+
+  // ---- アプリ系: ?to=xxx&url=元のhttpsリンク ----
+  // hosts に合わないURLは開かない（関係ないサイトへ飛ばされないように）。
+  var APP_TARGETS = {
+    asana: {
+      name: "Asana", hosts: /^app\.asana\.com$/,
+      app: function (u) { return "asanadesktop:///app" + u.pathname + u.search; }
+    },
+    notion: {
+      name: "Notion", hosts: /(^|\.)notion\.(so|site)$/,
+      app: function (u) { return "notion://" + u.host + u.pathname + u.search + u.hash; }
+    },
+    slack: {
+      name: "Slack", hosts: /(^|\.)slack\.com$/,
+      app: function (u) {
+        var m;
+        // https://app.slack.com/client/T.../C...
+        if ((m = u.pathname.match(/^\/client\/(T[A-Z0-9]+)\/([CDG][A-Z0-9]+)/))) {
+          return "slack://channel?team=" + m[1] + "&id=" + m[2];
+        }
+        // https://xxx.slack.com/archives/C.../p...（メッセージ単位はアプリ直行できないのでチャンネルを開く）
+        if (SLACK_TEAM_ID && (m = u.pathname.match(/^\/archives\/([CDG][A-Z0-9]+)/))) {
+          return "slack://channel?team=" + SLACK_TEAM_ID + "&id=" + m[1];
+        }
+        return null; // 変換できないものは元のリンク（Slack 標準の「アプリで開く」ページ）へ
+      }
+    }
+  };
+  // =================================================
+
+  var params = new URLSearchParams(location.search);
+  var to = params.get("to") || "claude";
+  var msg = document.getElementById("msg");
+  var alt = document.getElementById("alt");
+
+  function fallbackLink(href, label) {
+    var a = document.createElement("a");
+    a.href = href; a.textContent = label;
+    alt.append("アプリが開かない場合は ", a);
+  }
+
+  if (AI_TARGETS[to]) {
+    var t = AI_TARGETS[to];
+    var q = params.get("q") || "";
+    if (!q) {
+      msg.textContent = "プロンプトが空です。q= に開きたい内容を入れてください。";
+    } else {
+      var enc = encodeURIComponent(q);
+      var appUrl = t.app(enc);
+      if (t.web) fallbackLink(t.web(enc), "ブラウザで開く");
+      var trusted = TRUSTED_PREFIXES.some(function (p) { return q.indexOf(p) === 0; });
+      if (trusted) {
+        msg.textContent = t.name + "を開いています…";
+        location.href = appUrl;
+      } else {
+        msg.textContent = "次の内容で" + t.name + "を開きます。心当たりがなければ閉じてください。";
+        document.getElementById("preview").textContent = q;
+        document.getElementById("confirm").hidden = false;
+        document.getElementById("go").addEventListener("click", function () { location.href = appUrl; });
+      }
+    }
+  } else if (APP_TARGETS[to]) {
+    var a = APP_TARGETS[to];
+    var u = null;
+    try { u = new URL(params.get("url") || ""); } catch (e) {}
+    if (!u || u.protocol !== "https:" || !a.hosts.test(u.hostname)) {
+      msg.textContent = a.name + "のリンクではないため開けません。url= に" + a.name + "のhttpsリンクを入れてください。";
+    } else {
+      var dest = a.app(u);
+      fallbackLink(u.href, "ブラウザで開く");
+      msg.textContent = a.name + "を開いています…";
+      location.href = dest || u.href;
+    }
+  } else {
+    msg.textContent = "転送先「" + to + "」は登録されていません。to= には " +
+      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS)).join(" / ") + " のどれかを指定してください。";
+  }
+</script>
+</body>
 </html>
