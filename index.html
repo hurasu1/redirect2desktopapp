@@ -75,6 +75,11 @@
       }
     }
   };
+  // ---- エディタ系: ?to=vscode&path=/絶対パス[&line=行番号] ----
+  // 手元のフォルダやファイルを VS Code で開く。絶対パスだけ受け付け、".." を含むものは開かない。
+  var EDITOR_TARGETS = {
+    vscode: { name: "VS Code", scheme: "vscode://file" }
+  };
   // =================================================
 
   var params = new URLSearchParams(location.search);
@@ -120,9 +125,23 @@
       msg.textContent = a.name + "を開いています…";
       location.href = dest || u.href;
     }
+  } else if (EDITOR_TARGETS[to]) {
+    var ed = EDITOR_TARGETS[to];
+    var path = params.get("path") || "";
+    var line = params.get("line") || "";
+    if (path.charAt(0) !== "/" || path.split("/").indexOf("..") !== -1) {
+      msg.textContent = "path= には開きたいフォルダかファイルの絶対パス（/ で始まるもの）を入れてください。";
+    } else if (line && !/^\d+$/.test(line)) {
+      msg.textContent = "line= には行番号（数字）を入れてください。";
+    } else {
+      var edUrl = ed.scheme + encodeURI(path) + (line ? ":" + line : "");
+      msg.textContent = ed.name + "で開いています…";
+      alt.textContent = path;
+      location.href = edUrl;
+    }
   } else {
     msg.textContent = "転送先「" + to + "」は登録されていません。to= には " +
-      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS)).join(" / ") + " のどれかを指定してください。";
+      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS)).join(" / ") + " のどれかを指定してください。";
   }
 </script>
 </body>
