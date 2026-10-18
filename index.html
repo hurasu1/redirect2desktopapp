@@ -27,6 +27,11 @@
     <pre id="preview"></pre>
     <p><button id="go" type="button">開く</button></p>
   </div>
+  <div id="resume" hidden>
+    <pre id="resume-cmd"></pre>
+    <p><button id="copy" type="button">コマンドをコピー</button> <span class="muted" id="copied"></span></p>
+    <p id="resume-links"></p>
+  </div>
   <p class="muted" id="alt"></p>
 </main>
 <script>
@@ -86,12 +91,29 @@
   var EDITOR_TARGETS = {
     vscode: { name: "VS Code", scheme: "vscode://file", remote: "vscode://vscode-remote/ssh-remote+" }
   };
+  // VS Code は、今あるウィンドウではなく新しいウィンドウで開く
+  var VSCODE_NEW_WINDOW = "?windowId=_blank";
+  // ---- セッションの再開: ?to=claude-resume&session=<UUID>&path=/作業フォルダ[&host=SSHのホスト名] ----
+  // claude -p で動かしたセッションの続きを開くための案内。
+  // host あり（SSH 先）：VS Code で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くボタンを置く。
+  // host なし（この PC）：Claude デスクトップで再開するコマンド（claude --desktop --resume）を出す。
+  // どちらも、確実に再開できるターミナル用のコマンドをコピーできるようにしておく。
+  var RESUME_TARGETS = { "claude-resume": { name: "Claude Code" } };
   // =================================================
 
   var params = new URLSearchParams(location.search);
   var to = params.get("to") || "claude";
   var msg = document.getElementById("msg");
   var alt = document.getElementById("alt");
+
+  // アプリに渡したあと、このタブを閉じる（タブが増え続けないように）。
+  // アプリが開かなかったときに下のリンクを押せるよう、少し待ってから閉じる。
+  // ブラウザが閉じさせない場合（リンクから開いたタブでないとき）は、何も起きずに残る。
+  var CLOSE_AFTER_MS = 3000;
+  function openAppAndClose(href) {
+    location.href = href;
+    setTimeout(function () { window.close(); }, CLOSE_AFTER_MS);
+  }
 
   function fallbackLink(href, label) {
     var a = document.createElement("a");
@@ -111,12 +133,12 @@
       var trusted = TRUSTED_PREFIXES.some(function (p) { return q.indexOf(p) === 0; });
       if (trusted) {
         msg.textContent = t.name + "を開いています…";
-        location.href = appUrl;
+        openAppAndClose(appUrl);
       } else {
         msg.textContent = "次の内容で" + t.name + "を開きます。心当たりがなければ閉じてください。";
         document.getElementById("preview").textContent = q;
         document.getElementById("confirm").hidden = false;
-        document.getElementById("go").addEventListener("click", function () { location.href = appUrl; });
+        document.getElementById("go").addEventListener("click", function () { openAppAndClose(appUrl); });
       }
     }
   } else if (APP_TARGETS[to]) {
@@ -129,7 +151,7 @@
       var dest = a.app(u);
       fallbackLink(u.href, "ブラウザで開く");
       msg.textContent = a.name + "を開いています…";
-      location.href = dest || u.href;
+      if (dest) openAppAndClose(dest); else location.href = u.href;
     }
   } else if (EDITOR_TARGETS[to]) {
     var ed = EDITOR_TARGETS[to];
@@ -144,15 +166,55 @@
       msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
     } else {
       // SSH 先で行番号まで飛べるかは未確認なので、SSH 先ではファイルかフォルダを開くだけにしている
-      var edUrl = host ? ed.remote + host + encodeURI(path)
-                       : ed.scheme + encodeURI(path) + (line ? ":" + line : "");
+      var edUrl = (host ? ed.remote + host + encodeURI(path)
+                        : ed.scheme + encodeURI(path) + (line ? ":" + line : "")) + VSCODE_NEW_WINDOW;
       msg.textContent = ed.name + "で開いています…" + (host ? "（SSH: " + host + "）" : "");
       alt.textContent = (host ? host + ":" : "") + path;
-      location.href = edUrl;
+      openAppAndClose(edUrl);
+    }
+  } else if (RESUME_TARGETS[to]) {
+    var rt = RESUME_TARGETS[to];
+    var session = params.get("session") || "";
+    var rpath = params.get("path") || "";
+    var rhost = params.get("host") || "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session)) {
+      msg.textContent = "session= にはセッション ID（UUID）を入れてください。";
+    } else if (rpath.charAt(0) !== "/" || rpath.split("/").indexOf("..") !== -1 || !/^[A-Za-z0-9._\/-]+$/.test(rpath)) {
+      msg.textContent = "path= には作業フォルダの絶対パス（/ で始まるもの）を入れてください。";
+    } else if (rhost && !/^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$/.test(rhost)) {
+      msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
+    } else {
+      var cmd = rhost ? "cd " + rpath + " && claude --resume " + session
+                      : "cd " + rpath + " && claude --desktop --resume " + session;
+      var cmdBox = document.getElementById("resume-cmd");
+      cmdBox.textContent = (rhost ? "# " + rhost + " のターミナルで実行\n" : "# この PC のターミナルで実行（Claude デスクトップで開く）\n") + cmd;
+      document.getElementById("resume").hidden = false;
+      document.getElementById("copy").addEventListener("click", function () {
+        var done = function () { document.getElementById("copied").textContent = "コピーしました"; };
+        if (navigator.clipboard) navigator.clipboard.writeText(cmd).then(done, function () {
+          document.getElementById("copied").textContent = "コピーできませんでした。上のコマンドを選んでコピーしてください";
+        });
+      });
+      var links = document.getElementById("resume-links");
+      if (rhost) {
+        var folderUrl = EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath) + VSCODE_NEW_WINDOW;
+        var panel = document.createElement("a");
+        panel.href = "vscode://anthropic.claude-code/open?session=" + session;
+        panel.textContent = "② Claude Code パネルでこのセッションを開く";
+        var folder = document.createElement("a");
+        folder.href = folderUrl;
+        folder.textContent = "① VS Code で作業フォルダを開く（SSH: " + rhost + "）";
+        links.append(folder, document.createElement("br"), panel);
+        msg.textContent = "VS Code で " + rhost + " の作業フォルダを開いています。開いたら ② を押してください。" +
+          "パネルで開けないときは、VS Code のターミナルに下のコマンドを貼り付けてください。";
+        location.href = folderUrl;
+      } else {
+        msg.textContent = "Claude デスクトップで再開します。ターミナルに次のコマンドを貼り付けてください。";
+      }
     }
   } else {
     msg.textContent = "転送先「" + to + "」は登録されていません。to= には " +
-      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS)).join(" / ") + " のどれかを指定してください。";
+      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS), Object.keys(RESUME_TARGETS)).join(" / ") + " のどれかを指定してください。";
   }
 </script>
 </body>
