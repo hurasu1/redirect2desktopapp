@@ -9,8 +9,9 @@ https://claudeなどできたものをclaude://に転送する。あ
 | ChatGPT | `?to=chatgpt&q=プロンプト` |
 | Asana / Notion / Slack | `?to=asana&url=元のhttpsリンク`（notion・slack も同じ） |
 | VS Code（フォルダ・ファイル） | `?to=vscode&path=/絶対パス`、行を指定するなら `&line=10` |
+| VS Code（SSH 先） | `?to=vscode&host=10.10.0.119&path=/絶対パス`（host は `~/.ssh/config` の Host 名か IP） |
 
-VS Code は `vscode://file/<パス>` に転送する。絶対パスだけ受け付け、`..` を含むものは開かない。
+VS Code は `vscode://file/<パス>`、host があれば `vscode://vscode-remote/ssh-remote+<host><パス>`（Remote-SSH）に転送する。SSH 先では行番号の指定は使わない。絶対パスだけ受け付け、`..` を含むものは開かない。
 
 ## GitHub Pages deployment
 

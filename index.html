@@ -80,10 +80,11 @@
       }
     }
   };
-  // ---- エディタ系: ?to=vscode&path=/絶対パス[&line=行番号] ----
-  // 手元のフォルダやファイルを VS Code で開く。絶対パスだけ受け付け、".." を含むものは開かない。
+  // ---- エディタ系: ?to=vscode&path=/絶対パス[&line=行番号][&host=SSHのホスト名] ----
+  // フォルダやファイルを VS Code で開く。host があれば Remote-SSH で SSH 先を開く。
+  // 絶対パスだけ受け付け、".." を含むものは開かない。host は ~/.ssh/config の Host 名か IP（user@ も可）。
   var EDITOR_TARGETS = {
-    vscode: { name: "VS Code", scheme: "vscode://file" }
+    vscode: { name: "VS Code", scheme: "vscode://file", remote: "vscode://vscode-remote/ssh-remote+" }
   };
   // =================================================
 
@@ -134,14 +135,19 @@
     var ed = EDITOR_TARGETS[to];
     var path = params.get("path") || "";
     var line = params.get("line") || "";
+    var host = params.get("host") || "";
     if (path.charAt(0) !== "/" || path.split("/").indexOf("..") !== -1) {
       msg.textContent = "path= には開きたいフォルダかファイルの絶対パス（/ で始まるもの）を入れてください。";
     } else if (line && !/^\d+$/.test(line)) {
       msg.textContent = "line= には行番号（数字）を入れてください。";
+    } else if (host && !/^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$/.test(host)) {
+      msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
     } else {
-      var edUrl = ed.scheme + encodeURI(path) + (line ? ":" + line : "");
-      msg.textContent = ed.name + "で開いています…";
-      alt.textContent = path;
+      // SSH 先で行番号まで飛べるかは未確認なので、SSH 先ではファイルかフォルダを開くだけにしている
+      var edUrl = host ? ed.remote + host + encodeURI(path)
+                       : ed.scheme + encodeURI(path) + (line ? ":" + line : "");
+      msg.textContent = ed.name + "で開いています…" + (host ? "（SSH: " + host + "）" : "");
+      alt.textContent = (host ? host + ":" : "") + path;
       location.href = edUrl;
     }
   } else {
