@@ -91,6 +91,8 @@
   var EDITOR_TARGETS = {
     vscode: { name: "VS Code", scheme: "vscode://file", remote: "vscode://vscode-remote/ssh-remote+" }
   };
+  // VS Code は、今あるウィンドウではなく新しいウィンドウで開く
+  var VSCODE_NEW_WINDOW = "?windowId=_blank";
   // ---- セッションの再開: ?to=claude-resume&session=<UUID>&path=/作業フォルダ[&host=SSHのホスト名] ----
   // claude -p で動かしたセッションの続きを開くための案内。
   // host あり（SSH 先）：VS Code で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くボタンを置く。
@@ -155,8 +157,8 @@
       msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
     } else {
       // SSH 先で行番号まで飛べるかは未確認なので、SSH 先ではファイルかフォルダを開くだけにしている
-      var edUrl = host ? ed.remote + host + encodeURI(path)
-                       : ed.scheme + encodeURI(path) + (line ? ":" + line : "");
+      var edUrl = (host ? ed.remote + host + encodeURI(path)
+                        : ed.scheme + encodeURI(path) + (line ? ":" + line : "")) + VSCODE_NEW_WINDOW;
       msg.textContent = ed.name + "で開いています…" + (host ? "（SSH: " + host + "）" : "");
       alt.textContent = (host ? host + ":" : "") + path;
       location.href = edUrl;
@@ -186,7 +188,7 @@
       });
       var links = document.getElementById("resume-links");
       if (rhost) {
-        var folderUrl = EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath);
+        var folderUrl = EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath) + VSCODE_NEW_WINDOW;
         var panel = document.createElement("a");
         panel.href = "vscode://anthropic.claude-code/open?session=" + session;
         panel.textContent = "② Claude Code パネルでこのセッションを開く";
