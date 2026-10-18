@@ -95,9 +95,10 @@
   var VSCODE_NEW_WINDOW = "?windowId=_blank";
   // ---- セッションの再開: ?to=claude-resume&session=<UUID>&path=/作業フォルダ[&host=SSHのホスト名] ----
   // claude -p で動かしたセッションの続きを開くための案内。
-  // host あり（SSH 先）：VS Code で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くボタンを置く。
+  // ブラウザはボタンを押さないとクリップボードに書かせないので、ボタン1回で「コピー → 開く」をする。
+  // host あり（SSH 先）：コマンドをコピーして VS Code で作業フォルダを開く。VS Code のターミナルに貼れば再開できる。
   // host なし（この PC）：Claude デスクトップで再開するコマンド（claude --desktop --resume）を出す。
-  // どちらも、確実に再開できるターミナル用のコマンドをコピーできるようにしておく。
+  // ※Claude Code 拡張のパネル（vscode://anthropic.claude-code/open?session=）は、claude -p のセッションを開けなかった（2026-10-18）ので使わない。
   var RESUME_TARGETS = { "claude-resume": { name: "Claude Code" } };
   // =================================================
 
@@ -189,27 +190,29 @@
       var cmdBox = document.getElementById("resume-cmd");
       cmdBox.textContent = (rhost ? "# " + rhost + " のターミナルで実行\n" : "# この PC のターミナルで実行（Claude デスクトップで開く）\n") + cmd;
       document.getElementById("resume").hidden = false;
-      document.getElementById("copy").addEventListener("click", function () {
-        var done = function () { document.getElementById("copied").textContent = "コピーしました"; };
-        if (navigator.clipboard) navigator.clipboard.writeText(cmd).then(done, function () {
-          document.getElementById("copied").textContent = "コピーできませんでした。上のコマンドを選んでコピーしてください";
-        });
-      });
-      var links = document.getElementById("resume-links");
+      var copied = document.getElementById("copied");
+      function copyCmd() {
+        if (!navigator.clipboard) return Promise.reject();
+        return navigator.clipboard.writeText(cmd).then(function () { copied.textContent = "コピーしました"; });
+      }
+      var copyBtn = document.getElementById("copy");
       if (rhost) {
         var folderUrl = EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath) + VSCODE_NEW_WINDOW;
-        var panel = document.createElement("a");
-        panel.href = "vscode://anthropic.claude-code/open?session=" + session;
-        panel.textContent = "② Claude Code パネルでこのセッションを開く";
-        var folder = document.createElement("a");
-        folder.href = folderUrl;
-        folder.textContent = "① VS Code で作業フォルダを開く（SSH: " + rhost + "）";
-        links.append(folder, document.createElement("br"), panel);
-        msg.textContent = "VS Code で " + rhost + " の作業フォルダを開いています。開いたら ② を押してください。" +
-          "パネルで開けないときは、VS Code のターミナルに下のコマンドを貼り付けてください。";
-        location.href = folderUrl;
+        msg.textContent = "ボタンを押すと、再開のコマンドをコピーして、VS Code で " + rhost +
+          " の作業フォルダを開きます。VS Code のターミナル（Ctrl+`）に貼り付けてください。";
+        copyBtn.textContent = "コピーして VS Code で開く";
+        copyBtn.addEventListener("click", function () {
+          var go = function () { location.href = folderUrl; };
+          copyCmd().then(go, function () {
+            copied.textContent = "コピーできませんでした。上のコマンドを選んでコピーしてください";
+            go();
+          });
+        });
       } else {
-        msg.textContent = "Claude デスクトップで再開します。ターミナルに次のコマンドを貼り付けてください。";
+        msg.textContent = "ボタンでコマンドをコピーし、ターミナルに貼り付けると Claude デスクトップで開きます。";
+        copyBtn.addEventListener("click", function () {
+          copyCmd().catch(function () { copied.textContent = "コピーできませんでした。上のコマンドを選んでコピーしてください"; });
+        });
       }
     }
   } else {
