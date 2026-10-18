@@ -16,6 +16,8 @@ VS Code は `vscode://file/<パス>`、host があれば `vscode://vscode-remote
 
 セッションの再開は、host があれば VS Code（Remote-SSH）で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くリンク（`vscode://anthropic.claude-code/open?session=<UUID>`）を置く。host がなければ Claude デスクトップで開くコマンド（`claude --desktop --resume <UUID>`）を出す。どちらも、ターミナルで確実に再開できるコマンドをコピーできる。ai-ops の `scripts/run_task.py` が、台帳のタスクの「AIセッション」にこのリンクを入れる。
 
+アプリに渡すだけの転送（Claude・ChatGPT・Asana・Notion・Slack・VS Code）は、3秒後にタブを閉じる。ブラウザが閉じさせない場合（リンクから新しく開いたタブでないとき）は残る。セッションの再開・内容の確認・エラー・ブラウザで開き直すときは閉じない。
+
 ## GitHub Pages deployment
 
 Before the first deployment, a repository administrator must enable Pages in

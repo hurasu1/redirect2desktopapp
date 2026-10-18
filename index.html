@@ -106,6 +106,15 @@
   var msg = document.getElementById("msg");
   var alt = document.getElementById("alt");
 
+  // アプリに渡したあと、このタブを閉じる（タブが増え続けないように）。
+  // アプリが開かなかったときに下のリンクを押せるよう、少し待ってから閉じる。
+  // ブラウザが閉じさせない場合（リンクから開いたタブでないとき）は、何も起きずに残る。
+  var CLOSE_AFTER_MS = 3000;
+  function openAppAndClose(href) {
+    location.href = href;
+    setTimeout(function () { window.close(); }, CLOSE_AFTER_MS);
+  }
+
   function fallbackLink(href, label) {
     var a = document.createElement("a");
     a.href = href; a.textContent = label;
@@ -124,12 +133,12 @@
       var trusted = TRUSTED_PREFIXES.some(function (p) { return q.indexOf(p) === 0; });
       if (trusted) {
         msg.textContent = t.name + "を開いています…";
-        location.href = appUrl;
+        openAppAndClose(appUrl);
       } else {
         msg.textContent = "次の内容で" + t.name + "を開きます。心当たりがなければ閉じてください。";
         document.getElementById("preview").textContent = q;
         document.getElementById("confirm").hidden = false;
-        document.getElementById("go").addEventListener("click", function () { location.href = appUrl; });
+        document.getElementById("go").addEventListener("click", function () { openAppAndClose(appUrl); });
       }
     }
   } else if (APP_TARGETS[to]) {
@@ -142,7 +151,7 @@
       var dest = a.app(u);
       fallbackLink(u.href, "ブラウザで開く");
       msg.textContent = a.name + "を開いています…";
-      location.href = dest || u.href;
+      if (dest) openAppAndClose(dest); else location.href = u.href;
     }
   } else if (EDITOR_TARGETS[to]) {
     var ed = EDITOR_TARGETS[to];
@@ -161,7 +170,7 @@
                         : ed.scheme + encodeURI(path) + (line ? ":" + line : "")) + VSCODE_NEW_WINDOW;
       msg.textContent = ed.name + "で開いています…" + (host ? "（SSH: " + host + "）" : "");
       alt.textContent = (host ? host + ":" : "") + path;
-      location.href = edUrl;
+      openAppAndClose(edUrl);
     }
   } else if (RESUME_TARGETS[to]) {
     var rt = RESUME_TARGETS[to];
