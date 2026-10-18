@@ -56,8 +56,13 @@
       app: function (u) { return "asanadesktop:///app" + u.pathname + u.search; }
     },
     notion: {
-      name: "Notion", hosts: /(^|\.)notion\.(so|site)$/,
-      app: function (u) { return "notion://" + u.host + u.pathname + u.search + u.hash; }
+      name: "Notion", hosts: /(^|\.)notion\.(so|site|com)$/,
+      app: function (u) {
+        // https://app.notion.com/p/<32桁のID> は、アプリが確実に開ける notion://www.notion.so/<ID> に直す
+        var m = u.hostname === "app.notion.com" && u.pathname.match(/([0-9a-f]{32})/i);
+        if (m) return "notion://www.notion.so/" + m[1] + u.search + u.hash;
+        return "notion://" + u.host + u.pathname + u.search + u.hash;
+      }
     },
     slack: {
       name: "Slack", hosts: /(^|\.)slack\.com$/,
