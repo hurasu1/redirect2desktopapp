@@ -27,6 +27,11 @@
     <pre id="preview"></pre>
     <p><button id="go" type="button">開く</button></p>
   </div>
+  <div id="resume" hidden>
+    <pre id="resume-cmd"></pre>
+    <p><button id="copy" type="button">コマンドをコピー</button> <span class="muted" id="copied"></span></p>
+    <p id="resume-links"></p>
+  </div>
   <p class="muted" id="alt"></p>
 </main>
 <script>
@@ -86,6 +91,10 @@
   var EDITOR_TARGETS = {
     vscode: { name: "VS Code", scheme: "vscode://file", remote: "vscode://vscode-remote/ssh-remote+" }
   };
+  // ---- セッションの再開: ?to=claude-resume&session=<UUID>&path=/作業フォルダ[&host=SSHのホスト名] ----
+  // claude -p で動かしたセッションの続きを開くための案内。ブラウザからはコマンドを実行できないので、
+  // 再開コマンドを表示してコピーできるようにし、VS Code（SSH 先）・ターミナルを開くボタンを置く。
+  var RESUME_TARGETS = { "claude-resume": { name: "Claude Code", command: "claude --resume " } };
   // =================================================
 
   var params = new URLSearchParams(location.search);
@@ -150,9 +159,44 @@
       alt.textContent = (host ? host + ":" : "") + path;
       location.href = edUrl;
     }
+  } else if (RESUME_TARGETS[to]) {
+    var rt = RESUME_TARGETS[to];
+    var session = params.get("session") || "";
+    var rpath = params.get("path") || "";
+    var rhost = params.get("host") || "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session)) {
+      msg.textContent = "session= にはセッション ID（UUID）を入れてください。";
+    } else if (rpath.charAt(0) !== "/" || rpath.split("/").indexOf("..") !== -1 || !/^[A-Za-z0-9._\/-]+$/.test(rpath)) {
+      msg.textContent = "path= には作業フォルダの絶対パス（/ で始まるもの）を入れてください。";
+    } else if (rhost && !/^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$/.test(rhost)) {
+      msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
+    } else {
+      var cmd = "cd " + rpath + " && " + rt.command + session;
+      msg.textContent = rt.name + "のセッションを再開します。" + (rhost ? rhost + " で" : "") +
+        "ターミナルを開き、次のコマンドを貼り付けてください。";
+      document.getElementById("resume-cmd").textContent = (rhost ? "# " + rhost + " で実行\n" : "") + cmd;
+      document.getElementById("resume").hidden = false;
+      document.getElementById("copy").addEventListener("click", function () {
+        var done = function () { document.getElementById("copied").textContent = "コピーしました"; };
+        if (navigator.clipboard) navigator.clipboard.writeText(cmd).then(done, function () {
+          document.getElementById("copied").textContent = "コピーできませんでした。上のコマンドを選んでコピーしてください";
+        });
+      });
+      var links = document.getElementById("resume-links");
+      var vs = document.createElement("a");
+      vs.href = rhost ? EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath) : EDITOR_TARGETS.vscode.scheme + encodeURI(rpath);
+      vs.textContent = "VS Code で作業フォルダを開く" + (rhost ? "（SSH: " + rhost + "）" : "");
+      links.append(vs);
+      if (rhost) {
+        var ssh = document.createElement("a");
+        ssh.href = "ssh://" + rhost;
+        ssh.textContent = "ターミナルで ssh " + rhost + " を開く";
+        links.append(" ／ ", ssh);
+      }
+    }
   } else {
     msg.textContent = "転送先「" + to + "」は登録されていません。to= には " +
-      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS)).join(" / ") + " のどれかを指定してください。";
+      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS), Object.keys(RESUME_TARGETS)).join(" / ") + " のどれかを指定してください。";
   }
 </script>
 </body>
