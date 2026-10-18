@@ -14,7 +14,7 @@ https://claudeなどできたものをclaude://に転送する。あ
 
 VS Code は `vscode://file/<パス>`、host があれば `vscode://vscode-remote/ssh-remote+<host><パス>`（Remote-SSH）に転送する。SSH 先では行番号の指定は使わない。絶対パスだけ受け付け、`..` を含むものは開かない。
 
-セッションの再開は、ブラウザからコマンドを実行できないので、`cd <作業フォルダ> && claude --resume <UUID>` を表示してコピーできるようにし、VS Code（SSH 先）とターミナル（`ssh://<host>`）を開くリンクを置く。ai-ops の `scripts/run_task.py` が、台帳のタスクの「AIセッション」にこのリンクを入れる。
+セッションの再開は、host があれば VS Code（Remote-SSH）で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くリンク（`vscode://anthropic.claude-code/open?session=<UUID>`）を置く。host がなければ Claude デスクトップで開くコマンド（`claude --desktop --resume <UUID>`）を出す。どちらも、ターミナルで確実に再開できるコマンドをコピーできる。ai-ops の `scripts/run_task.py` が、台帳のタスクの「AIセッション」にこのリンクを入れる。
 
 ## GitHub Pages deployment
 

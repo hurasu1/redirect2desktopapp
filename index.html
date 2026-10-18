@@ -92,9 +92,11 @@
     vscode: { name: "VS Code", scheme: "vscode://file", remote: "vscode://vscode-remote/ssh-remote+" }
   };
   // ---- セッションの再開: ?to=claude-resume&session=<UUID>&path=/作業フォルダ[&host=SSHのホスト名] ----
-  // claude -p で動かしたセッションの続きを開くための案内。ブラウザからはコマンドを実行できないので、
-  // 再開コマンドを表示してコピーできるようにし、VS Code（SSH 先）・ターミナルを開くボタンを置く。
-  var RESUME_TARGETS = { "claude-resume": { name: "Claude Code", command: "claude --resume " } };
+  // claude -p で動かしたセッションの続きを開くための案内。
+  // host あり（SSH 先）：VS Code で作業フォルダを開き、Claude Code 拡張のパネルでセッションを開くボタンを置く。
+  // host なし（この PC）：Claude デスクトップで再開するコマンド（claude --desktop --resume）を出す。
+  // どちらも、確実に再開できるターミナル用のコマンドをコピーできるようにしておく。
+  var RESUME_TARGETS = { "claude-resume": { name: "Claude Code" } };
   // =================================================
 
   var params = new URLSearchParams(location.search);
@@ -171,10 +173,10 @@
     } else if (rhost && !/^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$/.test(rhost)) {
       msg.textContent = "host= には SSH のホスト名（~/.ssh/config の Host 名か IP）を入れてください。";
     } else {
-      var cmd = "cd " + rpath + " && " + rt.command + session;
-      msg.textContent = rt.name + "のセッションを再開します。" + (rhost ? rhost + " で" : "") +
-        "ターミナルを開き、次のコマンドを貼り付けてください。";
-      document.getElementById("resume-cmd").textContent = (rhost ? "# " + rhost + " で実行\n" : "") + cmd;
+      var cmd = rhost ? "cd " + rpath + " && claude --resume " + session
+                      : "cd " + rpath + " && claude --desktop --resume " + session;
+      var cmdBox = document.getElementById("resume-cmd");
+      cmdBox.textContent = (rhost ? "# " + rhost + " のターミナルで実行\n" : "# この PC のターミナルで実行（Claude デスクトップで開く）\n") + cmd;
       document.getElementById("resume").hidden = false;
       document.getElementById("copy").addEventListener("click", function () {
         var done = function () { document.getElementById("copied").textContent = "コピーしました"; };
@@ -183,15 +185,20 @@
         });
       });
       var links = document.getElementById("resume-links");
-      var vs = document.createElement("a");
-      vs.href = rhost ? EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath) : EDITOR_TARGETS.vscode.scheme + encodeURI(rpath);
-      vs.textContent = "VS Code で作業フォルダを開く" + (rhost ? "（SSH: " + rhost + "）" : "");
-      links.append(vs);
       if (rhost) {
-        var ssh = document.createElement("a");
-        ssh.href = "ssh://" + rhost;
-        ssh.textContent = "ターミナルで ssh " + rhost + " を開く";
-        links.append(" ／ ", ssh);
+        var folderUrl = EDITOR_TARGETS.vscode.remote + rhost + encodeURI(rpath);
+        var panel = document.createElement("a");
+        panel.href = "vscode://anthropic.claude-code/open?session=" + session;
+        panel.textContent = "② Claude Code パネルでこのセッションを開く";
+        var folder = document.createElement("a");
+        folder.href = folderUrl;
+        folder.textContent = "① VS Code で作業フォルダを開く（SSH: " + rhost + "）";
+        links.append(folder, document.createElement("br"), panel);
+        msg.textContent = "VS Code で " + rhost + " の作業フォルダを開いています。開いたら ② を押してください。" +
+          "パネルで開けないときは、VS Code のターミナルに下のコマンドを貼り付けてください。";
+        location.href = folderUrl;
+      } else {
+        msg.textContent = "Claude デスクトップで再開します。ターミナルに次のコマンドを貼り付けてください。";
       }
     }
   } else {
