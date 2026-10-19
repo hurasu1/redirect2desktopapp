@@ -116,6 +116,12 @@
   // 「チャットで開く」：claude.ai/new?q=。チャットは Drive のファイルを読めないので相談だけ。
   // PC で確かめるときは &mobile=1 を付ける。
   var MOBILE_CODE_URL = "https://claude.ai/code";
+  // &pc=<PC のサーバー>（ai-ops の task serve を Tailscale で見せた https://<名前>.ts.net）があれば、
+  // スマホではまずそこに回す。PC が依頼文の中の Notion のタスクでセッションを立て、そのセッションに飛ばす。
+  // 届かない（Tailscale がオフ・PC が止まっている）ときは、下のボタンを出す。
+  // ts.net 以外には回さない（関係ないサイトへ飛ばされないように）。
+  var PC_HOSTS = /\.ts\.net$/;
+  var PC_PROBE_MS = 4000;
   // =================================================
 
   var params = new URLSearchParams(location.search);
@@ -130,9 +136,40 @@
     return navigator.clipboard.writeText(text);
   }
 
+  // 依頼文の中の Notion のタスクの URL
+  function notionTaskUrl(q) {
+    var m = q.match(/https:\/\/(app\.notion\.com|www\.notion\.so)\/[^\s）)」]*[0-9a-f]{32}/i);
+    return m ? m[0] : null;
+  }
+
+  function pcServer() {
+    var u = null;
+    try { u = new URL(params.get("pc") || ""); } catch (e) {}
+    return u && u.protocol === "https:" && PC_HOSTS.test(u.hostname) ? u.origin : null;
+  }
+
+  // スマホで、PC のサーバーにつながればそこに回す。つながらなければ onFail
+  function tryPc(q, onFail) {
+    var pc = pcServer(), task = notionTaskUrl(q);
+    if (!pc || !task) return onFail("");
+    msg.textContent = "PC でセッションを立てています…";
+    var done = false;
+    var fail = function () {
+      if (done) return;
+      done = true;
+      onFail("PC につながりませんでした（スマホの Tailscale がオフか、PC が止まっています）。");
+    };
+    setTimeout(fail, PC_PROBE_MS);
+    fetch(pc + "/", { mode: "no-cors", cache: "no-store" }).then(function () {
+      if (done) return;
+      done = true;
+      location.href = pc + "/open?url=" + encodeURIComponent(task);
+    }, fail);
+  }
+
   // スマホで AI（to=claude）を開くとき：依頼文を見せて、ボタンで開く
-  function showMobileAi(q) {
-    msg.textContent = "スマホでは、どちらで開くかを選んでください。";
+  function showMobileAi(q, note) {
+    msg.textContent = (note ? note + " " : "") + "スマホでは、どちらで開くかを選んでください。";
     document.getElementById("mobile-prompt").textContent = q;
     document.getElementById("mobile").hidden = false;
     var copied = document.getElementById("m-copied");
@@ -169,7 +206,7 @@
     if (!q) {
       msg.textContent = "プロンプトが空です。q= に開きたい内容を入れてください。";
     } else if (isMobile && (to === "claude" || to === "claude-web")) {
-      showMobileAi(q);
+      tryPc(q, function (note) { showMobileAi(q, note); });
     } else {
       var enc = encodeURIComponent(q);
       var appUrl = t.app(enc);
