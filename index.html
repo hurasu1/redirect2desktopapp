@@ -148,10 +148,10 @@
     return u && u.protocol === "https:" && PC_HOSTS.test(u.hostname) ? u.origin : null;
   }
 
-  // スマホで、PC のサーバーにつながればそこに回す。つながらなければ onFail
-  function tryPc(q, onFail) {
-    var pc = pcServer(), task = notionTaskUrl(q);
-    if (!pc || !task) return onFail("");
+  // スマホで、PC のサーバーにつながれば pc + path に回す。つながらなければ onFail
+  function goPc(path, onFail) {
+    var pc = pcServer();
+    if (!pc || !path) return onFail("");
     msg.textContent = "PC でセッションを立てています…";
     var done = false;
     var fail = function () {
@@ -163,8 +163,13 @@
     fetch(pc + "/", { mode: "no-cors", cache: "no-store" }).then(function () {
       if (done) return;
       done = true;
-      location.href = pc + "/open?url=" + encodeURIComponent(task);
+      location.href = pc + path;
     }, fail);
+  }
+
+  function tryPc(q, onFail) {
+    var task = notionTaskUrl(q);
+    goPc(task && "/open?url=" + encodeURIComponent(task), onFail);
   }
 
   // スマホで AI（to=claude）を開くとき：依頼文を見せて、ボタンで開く
@@ -235,9 +240,19 @@
       if (dest) openAppAndClose(dest); else location.href = u.href;
     }
   } else if (isMobile && (EDITOR_TARGETS[to] || RESUME_TARGETS[to])) {
-    // スマホには VS Code も Claude デスクトップもない
-    msg.textContent = "このリンクは PC で開くものです（VS Code・Claude デスクトップ）。スマホでは開けません。";
-    alt.textContent = "スマホで続けるときは、Claude アプリの Claude Code で、PC の環境（claude remote-control）に新しいセッションを始めてください。";
+    // スマホには VS Code も Claude デスクトップもない。セッションの再開で &pc= があれば、
+    // PC のサーバー（/resume）に回して、PC でそのセッションの続きを立てる（SSH 先のセッションはまだ回さない）
+    var showPcOnly = function (note) {
+      msg.textContent = (note ? note + " " : "") + "このリンクは PC で開くものです（VS Code・Claude デスクトップ）。スマホでは開けません。";
+      alt.textContent = "スマホで続けるときは、Notion の「AIで開く」から新しいセッションを始めてください。";
+    };
+    var rs = params.get("session") || "";
+    if (RESUME_TARGETS[to] && !params.get("host") &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rs)) {
+      goPc("/resume?session=" + rs, showPcOnly);
+    } else {
+      showPcOnly("");
+    }
   } else if (EDITOR_TARGETS[to]) {
     var ed = EDITOR_TARGETS[to];
     var path = params.get("path") || "";
