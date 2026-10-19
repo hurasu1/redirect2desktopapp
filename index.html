@@ -27,6 +27,12 @@
     <pre id="preview"></pre>
     <p><button id="go" type="button">開く</button></p>
   </div>
+  <div id="mobile" hidden>
+    <pre id="mobile-prompt"></pre>
+    <p><button id="m-code" type="button">コピーして Claude Code を開く</button> <span class="muted" id="m-copied"></span></p>
+    <p class="muted">Claude Code では、Mac の環境（claude remote-control）を選んで新しいセッションを始め、貼り付けて送ってください。</p>
+    <p><button id="m-chat" type="button">チャットで開く（相談だけ）</button></p>
+  </div>
   <div id="resume" hidden>
     <pre id="resume-cmd"></pre>
     <p><button id="copy" type="button">コマンドをコピー</button> <span class="muted" id="copied"></span></p>
@@ -103,12 +109,44 @@
   // host あり（SSH 先）：コマンド（claude --resume）をコピーして、VS Code で SSH 先の作業フォルダを開く。VS Code のターミナルに貼る。
   // ※Claude Code 拡張のパネル（vscode://anthropic.claude-code/open?session=）は、claude -p のセッションを開けなかった（2026-10-18・19）ので使わない。
   var RESUME_TARGETS = { "claude-resume": { name: "Claude Code" } };
+  // ---- スマホ ----
+  // スマホでは claude:// や vscode:// のアプリがないので、AI（to=claude）は自動で飛ばさずボタンを出す。
+  // 「コピーして Claude Code を開く」：依頼文をコピーして claude.ai/code を開く。PC で常駐させた
+  //   claude remote-control の環境を選んで新しいセッションを始め、貼り付ける（ai-ops の docs/claude-cli.md）。
+  // 「チャットで開く」：claude.ai/new?q=。チャットは Drive のファイルを読めないので相談だけ。
+  // PC で確かめるときは &mobile=1 を付ける。
+  var MOBILE_CODE_URL = "https://claude.ai/code";
   // =================================================
 
   var params = new URLSearchParams(location.search);
   var to = params.get("to") || "claude";
   var msg = document.getElementById("msg");
   var alt = document.getElementById("alt");
+  var isMobile = params.get("mobile") === "1" || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS は Mac と名乗る
+
+  function copyText(text) {
+    if (!navigator.clipboard) return Promise.reject();
+    return navigator.clipboard.writeText(text);
+  }
+
+  // スマホで AI（to=claude）を開くとき：依頼文を見せて、ボタンで開く
+  function showMobileAi(q) {
+    msg.textContent = "スマホでは、どちらで開くかを選んでください。";
+    document.getElementById("mobile-prompt").textContent = q;
+    document.getElementById("mobile").hidden = false;
+    var copied = document.getElementById("m-copied");
+    document.getElementById("m-code").addEventListener("click", function () {
+      var go = function () { location.href = MOBILE_CODE_URL; };
+      copyText(q).then(go, function () {
+        copied.textContent = "コピーできませんでした。上の文を選んでコピーしてください";
+        setTimeout(go, 1500);
+      });
+    });
+    document.getElementById("m-chat").addEventListener("click", function () {
+      location.href = "https://claude.ai/new?q=" + encodeURIComponent(q);
+    });
+  }
 
   // アプリに渡したあと、このタブを閉じる（タブが増え続けないように）。
   // アプリが開かなかったときに下のリンクを押せるよう、少し待ってから閉じる。
@@ -130,6 +168,8 @@
     var q = params.get("q") || "";
     if (!q) {
       msg.textContent = "プロンプトが空です。q= に開きたい内容を入れてください。";
+    } else if (isMobile && (to === "claude" || to === "claude-web")) {
+      showMobileAi(q);
     } else {
       var enc = encodeURIComponent(q);
       var appUrl = t.app(enc);
@@ -157,6 +197,10 @@
       msg.textContent = a.name + "を開いています…";
       if (dest) openAppAndClose(dest); else location.href = u.href;
     }
+  } else if (isMobile && (EDITOR_TARGETS[to] || RESUME_TARGETS[to])) {
+    // スマホには VS Code も Claude デスクトップもない
+    msg.textContent = "このリンクは PC で開くものです（VS Code・Claude デスクトップ）。スマホでは開けません。";
+    alt.textContent = "スマホで続けるときは、Claude アプリの Claude Code で、PC の環境（claude remote-control）に新しいセッションを始めてください。";
   } else if (EDITOR_TARGETS[to]) {
     var ed = EDITOR_TARGETS[to];
     var path = params.get("path") || "";
