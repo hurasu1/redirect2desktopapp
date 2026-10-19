@@ -16,6 +16,8 @@ VS Code は `vscode://file/<パス>`、host があれば `vscode://vscode-remote
 
 セッションの再開は、ボタン1回で再開のコマンドをクリップボードにコピーし（ブラウザはボタンを押さないとコピーさせない）、host があればそのまま VS Code（Remote-SSH）で作業フォルダを新しいウィンドウで開く。VS Code のターミナルに貼れば `claude --resume <UUID>` で再開できる。host がなければ Claude デスクトップで開くコマンド（`claude --desktop --resume <UUID>`）をコピーする。Claude Code 拡張のパネル（`vscode://anthropic.claude-code/open?session=`）は、claude -p のセッションを開けなかったので使わない。ai-ops の `scripts/run_task.py` が、台帳のタスクの「AIセッション」にこのリンクを入れる。
 
+スマホでは、Claude（`to=claude`）を自動で開かず、依頼文とボタンを2つ出す。「コピーして Claude Code を開く」は依頼文をコピーして `https://claude.ai/code` を開く（PC で常駐させた `claude remote-control` の環境を選び、新しいセッションに貼る）。「チャットで開く」は `https://claude.ai/new?q=` を開く。VS Code とセッションの再開は、スマホでは開けないと案内する。PC で確かめるときは `&mobile=1` を付ける。
+
 アプリに渡すだけの転送（Claude・ChatGPT・Asana・Notion・Slack・VS Code）は、3秒後にタブを閉じる。ブラウザが閉じさせない場合（リンクから新しく開いたタブでないとき）は残る。セッションの再開・内容の確認・エラー・ブラウザで開き直すときは閉じない。
 
 ## GitHub Pages deployment
