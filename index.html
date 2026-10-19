@@ -109,6 +109,10 @@
   // host あり（SSH 先）：コマンド（claude --resume）をコピーして、VS Code で SSH 先の作業フォルダを開く。VS Code のターミナルに貼る。
   // ※Claude Code 拡張のパネル（vscode://anthropic.claude-code/open?session=）は、claude -p のセッションを開けなかった（2026-10-18・19）ので使わない。
   var RESUME_TARGETS = { "claude-resume": { name: "Claude Code" } };
+  // ---- Codex のセッション: ?to=codex-resume&thread=<ID> ----
+  // ai-ops のワーカー（codex exec）のセッションを、Codex のアプリ（ChatGPT デスクトップ）で開く（codex://threads/<ID>）。
+  // スマホでは開けないので案内だけ出す。
+  var CODEX_THREAD_URL = "codex://threads/";
   // ---- スマホ ----
   // スマホでは claude:// や vscode:// のアプリがないので、AI（to=claude）は自動で飛ばさずボタンを出す。
   // 「コピーして Claude Code を開く」：依頼文をコピーして claude.ai/code を開く。PC で常駐させた
@@ -238,6 +242,18 @@
       fallbackLink(u.href, "ブラウザで開く");
       msg.textContent = a.name + "を開いています…";
       if (dest) openAppAndClose(dest); else location.href = u.href;
+    }
+  } else if (to === "codex-resume") {
+    var thread = params.get("thread") || "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(thread)) {
+      msg.textContent = "thread= には Codex のセッション ID を入れてください。";
+    } else if (isMobile) {
+      msg.textContent = "Codex のセッションは PC の Codex（ChatGPT デスクトップ）で開くものです。";
+      alt.textContent = "セッション ID：" + thread;
+    } else {
+      msg.textContent = "Codex でセッションを開いています…";
+      fallbackLink(CODEX_THREAD_URL + thread, "もう一度開く");
+      openAppAndClose(CODEX_THREAD_URL + thread);
     }
   } else if (isMobile && (EDITOR_TARGETS[to] || RESUME_TARGETS[to])) {
     // スマホには VS Code も Claude デスクトップもない。セッションの再開で &pc= があれば、
