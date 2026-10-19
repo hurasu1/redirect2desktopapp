@@ -34,3 +34,5 @@ a fine-grained personal access token with access to this repository and
 automatically. The default `GITHUB_TOKEN` cannot perform this initial enablement,
 even with `pages: write`. Remove the setup secret after Pages is enabled; subsequent
 deployments use `GITHUB_TOKEN`.
+
+スマホで AI（`to=claude`）を開くとき、`&pc=https://<名前>.ts.net` があれば、まずそこ（ai-ops の `task serve` を Tailscale で見せたもの）に回す。依頼文の中の Notion のタスクの URL を `/open?url=` で渡すと、PC がそのタスクでセッションを立て、そのセッション（claude.ai/code）に飛ばす。4秒たってもつながらなければ（スマホの Tailscale がオフ、PC が止まっている）、今までどおり「コピーして Claude Code を開く」「チャットで開く」のボタンを出す。`.ts.net` 以外には回さない。
