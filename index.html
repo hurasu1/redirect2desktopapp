@@ -125,6 +125,11 @@
   // 届かない（Tailscale がオフ・PC が止まっている）ときは、下のボタンを出す。
   // ts.net 以外には回さない（関係ないサイトへ飛ばされないように）。
   var PC_HOSTS = /\.ts\.net$/;
+  // ---- Mac 以外の PC（Windows など）----
+  // ai-ops のセッションの記録（~/.claude/projects）は Mac にしかない。Windows で claude://resume を開いても、
+  // その PC の Claude デスクトップには記録がないので開けない（2026-10-21）。
+  // そのため Mac 以外の PC でも、&pc= があればスマホと同じく Mac のサーバーに回し、Mac でセッションを立てて
+  // ブラウザ（claude.ai/code）で開く。届かなければ今までの動き。PC で確かめるときは &otherpc=1 を付ける。
   var PC_PROBE_MS = 4000;
   // =================================================
 
@@ -134,6 +139,7 @@
   var alt = document.getElementById("alt");
   var isMobile = params.get("mobile") === "1" || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS は Mac と名乗る
+  var isOtherPc = !isMobile && (params.get("otherpc") === "1" || !/Mac/i.test(navigator.platform || navigator.userAgent));
 
   function copyText(text) {
     if (!navigator.clipboard) return Promise.reject();
@@ -156,12 +162,12 @@
   function goPc(path, onFail) {
     var pc = pcServer();
     if (!pc || !path) return onFail("");
-    msg.textContent = "PC でセッションを立てています…";
+    msg.textContent = "Mac でセッションを立てています…";
     var done = false;
     var fail = function () {
       if (done) return;
       done = true;
-      onFail("PC につながりませんでした（スマホの Tailscale がオフか、PC が止まっています）。");
+      onFail("Mac につながりませんでした（この端末の Tailscale がオフか、Mac が止まっています）。");
     };
     setTimeout(fail, PC_PROBE_MS);
     fetch(pc + "/", { mode: "no-cors", cache: "no-store" }).then(function () {
@@ -209,6 +215,23 @@
     alt.append("アプリが開かない場合は ", a);
   }
 
+  // PC で AI（to=claude など）をアプリで開く
+  function openAi(t, q, note) {
+    var enc = encodeURIComponent(q);
+    var appUrl = t.app(enc);
+    if (t.web) fallbackLink(t.web(enc), "ブラウザで開く");
+    var trusted = TRUSTED_PREFIXES.some(function (p) { return q.indexOf(p) === 0; });
+    if (trusted) {
+      msg.textContent = (note ? note + " " : "") + t.name + "を開いています…";
+      openAppAndClose(appUrl);
+    } else {
+      msg.textContent = "次の内容で" + t.name + "を開きます。心当たりがなければ閉じてください。";
+      document.getElementById("preview").textContent = q;
+      document.getElementById("confirm").hidden = false;
+      document.getElementById("go").addEventListener("click", function () { openAppAndClose(appUrl); });
+    }
+  }
+
   if (AI_TARGETS[to]) {
     var t = AI_TARGETS[to];
     var q = params.get("q") || "";
@@ -216,20 +239,10 @@
       msg.textContent = "プロンプトが空です。q= に開きたい内容を入れてください。";
     } else if (isMobile && (to === "claude" || to === "claude-web")) {
       tryPc(q, function (note) { showMobileAi(q, note); });
+    } else if (isOtherPc && to === "claude" && pcServer() && notionTaskUrl(q)) {
+      tryPc(q, function (note) { openAi(t, q, note); });
     } else {
-      var enc = encodeURIComponent(q);
-      var appUrl = t.app(enc);
-      if (t.web) fallbackLink(t.web(enc), "ブラウザで開く");
-      var trusted = TRUSTED_PREFIXES.some(function (p) { return q.indexOf(p) === 0; });
-      if (trusted) {
-        msg.textContent = t.name + "を開いています…";
-        openAppAndClose(appUrl);
-      } else {
-        msg.textContent = "次の内容で" + t.name + "を開きます。心当たりがなければ閉じてください。";
-        document.getElementById("preview").textContent = q;
-        document.getElementById("confirm").hidden = false;
-        document.getElementById("go").addEventListener("click", function () { openAppAndClose(appUrl); });
-      }
+      openAi(t, q, "");
     }
   } else if (APP_TARGETS[to]) {
     var a = APP_TARGETS[to];
@@ -269,6 +282,14 @@
     } else {
       showPcOnly("");
     }
+  } else if (isOtherPc && RESUME_TARGETS[to] && !params.get("host") && pcServer() &&
+             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.get("session") || "")) {
+    // Mac 以外の PC：セッションの記録は Mac にあるので、Mac のサーバー（/resume）で続きを立てる
+    goPc("/resume?session=" + params.get("session"), function (note) {
+      msg.textContent = (note ? note + " " : "") + "このセッションは Mac にあります。Mac の Claude デスクトップで開くか、" +
+        "この端末の Tailscale をオンにしてから開き直してください。";
+      alt.textContent = "セッション ID：" + params.get("session");
+    });
   } else if (EDITOR_TARGETS[to]) {
     var ed = EDITOR_TARGETS[to];
     var path = params.get("path") || "";
