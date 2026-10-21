@@ -79,6 +79,11 @@
       name: "Slack", hosts: /(^|\.)slack\.com$/,
       app: function (u) {
         var m;
+        // https://app.slack.com/client/T.../C.../thread/C...-<ts>（スレッドの欄を開いた状態でアプリを開く。
+        // 返信の下書きが入力欄に出る。公式の資料にない書き方なので、動かなくなったらチャンネルを開くだけに戻す。2026-10-21 Mac で確認）
+        if ((m = u.pathname.match(/^\/client\/(T[A-Z0-9]+)\/([CDG][A-Z0-9]+)\/thread\/[CDG][A-Z0-9]+-(\d+\.\d+)/))) {
+          return "slack://channel?team=" + m[1] + "&id=" + m[2] + "&message=" + m[3] + "&thread_ts=" + m[3];
+        }
         // https://app.slack.com/client/T.../C...
         if ((m = u.pathname.match(/^\/client\/(T[A-Z0-9]+)\/([CDG][A-Z0-9]+)/))) {
           return "slack://channel?team=" + m[1] + "&id=" + m[2];
