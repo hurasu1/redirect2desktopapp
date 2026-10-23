@@ -135,6 +135,10 @@
   // その PC の Claude デスクトップには記録がないので開けない（2026-10-21）。
   // そのため Mac 以外の PC でも、&pc= があればスマホと同じく Mac のサーバーに回し、Mac でセッションを立てて
   // ブラウザ（claude.ai/code）で開く。届かなければ今までの動き。PC で確かめるときは &otherpc=1 を付ける。
+  // ---- Mac でも「AIで開く」は Claude Code で ----
+  // AI（to=claude）で依頼文に Notion のタスクがあり &pc= があれば、Mac でもチャットではなく Mac のサーバー
+  // （/open）でセッションを立て、Claude デスクトップの Claude Code で開く（サーバーの画面がそのまま飛ばす）。
+  // チャットより自由度が高いため（2026-10-23 森さん）。届かなければ今までどおりチャットを開く。
   var PC_PROBE_MS = 4000;
   // =================================================
 
@@ -244,7 +248,7 @@
       msg.textContent = "プロンプトが空です。q= に開きたい内容を入れてください。";
     } else if (isMobile && (to === "claude" || to === "claude-web")) {
       tryPc(q, function (note) { showMobileAi(q, note); });
-    } else if (isOtherPc && to === "claude" && pcServer() && notionTaskUrl(q)) {
+    } else if (!isMobile && to === "claude" && pcServer() && notionTaskUrl(q)) {
       tryPc(q, function (note) { openAi(t, q, note); });
     } else {
       openAi(t, q, "");
