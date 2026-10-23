@@ -37,6 +37,8 @@ deployments use `GITHUB_TOKEN`.
 
 スマホで AI（`to=claude`）を開くとき、`&pc=https://<名前>.ts.net` があれば、まずそこ（ai-ops の `task serve` を Tailscale で見せたもの）に回す。依頼文の中の Notion のタスクの URL を `/open?url=` で渡すと、PC がそのタスクでセッションを立て、そのセッション（claude.ai/code）に飛ばす。4秒たってもつながらなければ（スマホの Tailscale がオフ、PC が止まっている）、今までどおり「コピーして Claude Code を開く」「チャットで開く」のボタンを出す。`.ts.net` 以外には回さない。
 
+PC（Mac を含む）でも、AI（`to=claude`）の依頼文に Notion のタスクがあり `&pc=` があれば、同じく PC のサーバーの `/open` に回し、Claude デスクトップの Claude Code で開く（Mac ではサーバーの画面がそのまま飛ばす）。チャットより自由度が高いため（2026-10-23）。つながらなければ今までどおりチャット（`claude://claude.ai/new?q=`）を開く。
+
 セッションの再開（`to=claude-resume`）も、スマホで `&pc=` があり `host` がなければ、PC のサーバーの `/resume?session=<UUID>` に回す。PC はそのセッション（ワーカーの `claude -p` など）を続きとして Remote Control つきで起動し、そのセッションを開くボタンを出す。SSH 先のセッションはまだ回さない。
 
 Codex のセッション（`to=codex-resume&thread=<ID>`）は、PC では `codex://threads/<ID>` で Codex のアプリを開く。スマホでは案内だけ出す。ai-ops のワーカー（`codex exec`）が、タスクの「AIセッション」にこのリンクを入れる。
