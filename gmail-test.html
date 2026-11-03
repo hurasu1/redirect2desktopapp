@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Gmail リンクの試験</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1d2433; --bg:#f6f7f9; --muted:#5b6474; --link:#2754c5; --box:#e9ecf1; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e6e8ec; --bg:#16191f; --muted:#9aa3b2; --link:#8fb0ff; --box:#232832; } }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif; }
+  main { width:min(36rem, 100% - 2rem); margin:0 auto; padding:1.5rem 0 3rem; line-height:1.7; }
+  h1 { font-size:1.2rem; }
+  h2 { font-size:1rem; margin:1.5rem 0 .25rem; }
+  p { margin:0 0 .5rem; }
+  .muted { color:var(--muted); font-size:.85rem; word-break:break-all; }
+  a { color:var(--link); }
+  pre { background:var(--box); padding:.75rem 1rem; border-radius:6px; white-space:pre-wrap; word-break:break-all; font:inherit; font-size:.9rem; }
+  button { font:inherit; padding:.5rem 1.1rem; border-radius:6px; border:1px solid var(--muted); background:transparent; color:var(--fg); cursor:pointer; }
+  button:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+  #status { color:var(--link); min-height:1.5em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gmail リンクの試験</h1>
+  <p class="muted">ai-ops のメールの下書きを「文面をコピーして Gmail を開く」形にするための試験（試したら消す）。どのボタンも、先に下の文面をコピーしてから開く。開いたら返信の欄に貼って、URL がそのまま残るかも見る。送らない。</p>
+  <pre id="text">テストです（送らない）。
+URL：https://meet.google.com/ipz-bxma-dea</pre>
+  <p id="status"></p>
+
+  <h2>A. 下書きを開く（ウェブの URL）</h2>
+  <p class="muted">PC ではスレッドと返信の欄が開くはず。スマホではブラウザかアプリか</p>
+  <p><button type="button" data-href="https://mail.google.com/mail/?authuser=mori_tatsuya@araya.org#all?compose=thread-f:1878562518948708359%2Bmsg-a:r-8588680566380251629">A を開く</button></p>
+
+  <h2>B. アプリでスレッドを開く（cv=）</h2>
+  <p class="muted">googlegmail:///cv=1a11fea86e4d0007/accountId=1</p>
+  <p><button type="button" data-href="googlegmail:///cv=1a11fea86e4d0007/accountId=1">B を開く</button> <a href="googlegmail:///cv=1a11fea86e4d0007/accountId=1">（リンクで開く）</a></p>
+
+  <h2>C. アプリでスレッドを開く（アカウント名つき）</h2>
+  <p class="muted">googlegmail:///cv=1a11fea86e4d0007/accounts/mori_tatsuya@araya.org/label/all</p>
+  <p><button type="button" data-href="googlegmail:///cv=1a11fea86e4d0007/accounts/mori_tatsuya@araya.org/label/all">C を開く</button></p>
+
+  <h2>D. アプリを開くだけ</h2>
+  <p class="muted">googlegmail://</p>
+  <p><button type="button" data-href="googlegmail://">D を開く</button></p>
+
+  <h2>E. アプリで新しいメールを作る（本文入り）</h2>
+  <p class="muted">宛先は自分。本文の URL が残るか</p>
+  <p><button type="button" data-href="googlegmail:///co?to=mori_tatsuya%40araya.org&amp;subject=%5B%E3%83%86%E3%82%B9%E3%83%88%5D%20E&amp;body=%E3%83%86%E3%82%B9%E3%83%88%EF%BC%88%E9%80%81%E3%82%89%E3%81%AA%E3%81%84%EF%BC%89%0AURL%EF%BC%9Ahttps%3A%2F%2Fmeet.google.com%2Fipz-bxma-dea">E を開く</button></p>
+</main>
+<script>
+  var status = document.getElementById("status");
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return Promise.reject();
+  }
+  document.querySelectorAll("button[data-href]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var href = b.getAttribute("data-href");
+      copy(document.getElementById("text").textContent).then(function () {
+        status.textContent = "コピーしました。開いています…";
+      }, function () {
+        status.textContent = "コピーできませんでした。開いています…";
+      }).then(function () { location.href = href; });
+    });
+  });
+</script>
+</body>
+</html>
