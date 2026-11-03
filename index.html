@@ -38,6 +38,11 @@
     <p><button id="copy" type="button">コマンドをコピー</button> <span class="muted" id="copied"></span></p>
     <p id="resume-links"></p>
   </div>
+  <div id="gmail" hidden>
+    <pre id="gmail-text"></pre>
+    <p><button id="g-go" type="button">文面をコピーして Gmail を開く</button> <span class="muted" id="g-copied"></span></p>
+    <p class="muted" id="g-howto"></p>
+  </div>
   <p class="muted" id="alt"></p>
 </main>
 <script>
@@ -140,6 +145,17 @@
   // （/open）でセッションを立て、Claude デスクトップの Claude Code で開く（サーバーの画面がそのまま飛ばす）。
   // チャットより自由度が高いため（2026-10-23 森さん）。届かなければ今までどおりチャットを開く。
   var PC_PROBE_MS = 4000;
+  // ---- Gmail に文面を貼る: ?to=gmail&draft=<下書きの viewUrl>#z=<文面> / ?to=gmail&mto=<宛先>[&cc=][&su=]#z=<文面> ----
+  // ai-ops の Gmail の下書き用（ai-ops の src/ai_ops/gmail_link.py が作る）。Gmail のコネクタは下書きの本文の URL を
+  // Google の転送用URL（google.com/url?q=…）に書き換えるので、AI は本文が空の下書きだけを作り、文面はここで人に貼ってもらう。
+  // 文面は deflate（raw）で縮めた base64url を # の後ろ（z=）に入れる（# の後ろはサーバーに送られない）。
+  // ボタン1回で文面をコピーして開く（ブラウザはボタンを押さないとクリップボードに書かせない）。
+  // draft（返信）：PC は下書きの URL（スレッドで返信の欄が開く）。スマホは Gmail アプリを開くだけ
+  //   （アプリでスレッド・下書きを直接開くリンクはない。2026-11-03 に iPhone で試した）。人が「下書き」から開いて貼る。
+  // mto（新しく送るメール）：PC は Gmail の作成画面、スマホは Gmail アプリの作成画面を、宛先・件名・本文入りで開く。
+  var GMAIL_DRAFT_HOST = /^mail\.google\.com$/;
+  var GMAIL_APP = "googlegmail://";
+  var GMAIL_ADDRS = /^[^\s@,<>]+@[^\s@,<>]+(,[^\s@,<>]+@[^\s@,<>]+)*$/;
   // =================================================
 
   var params = new URLSearchParams(location.search);
@@ -241,7 +257,73 @@
     }
   }
 
-  if (AI_TARGETS[to]) {
+  // #z=<deflate-raw の base64url> を文面に戻す
+  function unpackText(z) {
+    var b64 = z.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Response(stream).text();
+  }
+
+  function showGmail() {
+    var z = (location.hash.match(/[#&]z=([A-Za-z0-9_-]+)/) || [])[1];
+    var draft = params.get("draft") || "";
+    var mto = params.get("mto") || "", cc = params.get("cc") || "", su = params.get("su") || "";
+    var d = null;
+    if (draft) { try { d = new URL(draft); } catch (e) {} }
+    if (draft && (!d || d.protocol !== "https:" || !GMAIL_DRAFT_HOST.test(d.hostname))) {
+      msg.textContent = "draft= には Gmail の下書きのリンク（https://mail.google.com/…）を入れてください。";
+      return;
+    }
+    if (!draft && (!GMAIL_ADDRS.test(mto) || (cc && !GMAIL_ADDRS.test(cc)))) {
+      msg.textContent = "mto= には宛先のメールアドレス（複数はカンマ区切り）を入れてください。";
+      return;
+    }
+    if (!z || typeof DecompressionStream === "undefined") {
+      msg.textContent = z ? "このブラウザでは文面を取り出せません。Notion の文面をコピーしてください。"
+                          : "文面（#z=）がありません。Notion の文面をコピーしてください。";
+      if (d) fallbackLink(d.href, "下書きを開く");
+      return;
+    }
+    unpackText(z).then(function (text) {
+      var href, howto;
+      if (draft) {
+        href = isMobile ? GMAIL_APP : d.href;
+        howto = isMobile
+          ? "Gmail アプリが開いたら、メニューの「下書き」から返信の下書き（宛先・件名は入っています）を開き、本文に貼り付けてください。"
+          : "スレッドの下に返信の欄が開きます（宛先・件名は入っています）。本文をクリックして貼り付けてください（⌘V / Ctrl+V）。";
+      } else if (isMobile) {
+        href = GMAIL_APP + "/co?to=" + encodeURIComponent(mto) + (cc ? "&cc=" + encodeURIComponent(cc) : "") +
+          "&subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(text);
+        howto = "Gmail アプリで、宛先・件名・本文の入った作成画面が開きます。確かめて送ってください。";
+      } else {
+        href = "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(mto) +
+          (cc ? "&cc=" + encodeURIComponent(cc) : "") + "&su=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(text);
+        howto = "Gmail で、宛先・件名・本文の入った作成画面が開きます。確かめて送ってください。";
+      }
+      msg.textContent = draft ? "次の文面を Gmail の返信に貼ります。" : "次の文面で Gmail のメールを作ります。";
+      document.getElementById("gmail-text").textContent = text;
+      document.getElementById("g-howto").textContent = howto;
+      document.getElementById("gmail").hidden = false;
+      var copied = document.getElementById("g-copied");
+      document.getElementById("g-go").addEventListener("click", function () {
+        var go = function () { location.href = href; };
+        copyText(text).then(function () { copied.textContent = "コピーしました"; go(); }, function () {
+          copied.textContent = "コピーできませんでした。上の文面を選んでコピーしてください";
+          setTimeout(go, 1500);
+        });
+      });
+    }, function () {
+      msg.textContent = "文面を取り出せませんでした（リンクが途中で切れているかもしれません）。Notion の文面をコピーしてください。";
+      if (d) fallbackLink(d.href, "下書きを開く");
+    });
+  }
+
+  if (to === "gmail") {
+    showGmail();
+  } else if (AI_TARGETS[to]) {
     var t = AI_TARGETS[to];
     var q = params.get("q") || "";
     if (!q) {
@@ -367,7 +449,7 @@
     }
   } else {
     msg.textContent = "転送先「" + to + "」は登録されていません。to= には " +
-      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS), Object.keys(RESUME_TARGETS)).join(" / ") + " のどれかを指定してください。";
+      Object.keys(AI_TARGETS).concat(Object.keys(APP_TARGETS), Object.keys(EDITOR_TARGETS), Object.keys(RESUME_TARGETS), ["codex-resume", "gmail"]).join(" / ") + " のどれかを指定してください。";
   }
 </script>
 </body>
