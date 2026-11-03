@@ -147,7 +147,8 @@
   var PC_PROBE_MS = 4000;
   // ---- Gmail に文面を貼る: ?to=gmail&draft=<下書きの viewUrl>#z=<文面> / ?to=gmail&mto=<宛先>[&cc=][&su=]#z=<文面> ----
   // ai-ops の Gmail の下書き用（ai-ops の src/ai_ops/gmail_link.py が作る）。Gmail のコネクタは下書きの本文の URL を
-  // Google の転送用URL（google.com/url?q=…）に書き換えるので、AI は本文が空の下書きだけを作り、文面はここで人に貼ってもらう。
+  // Google の転送用URL（google.com/url?q=…）に書き換えるので、URL の入るメールは、AI は目印の2行だけの下書きを作り、
+  // 文面はここで人に貼ってもらう（URL のないメールは、AI が本文入りの下書きを作るので、このページは使わない）。
   // 文面は deflate（raw）で縮めた base64url を # の後ろ（z=）に入れる（# の後ろはサーバーに送られない）。
   // ボタン1回で文面をコピーして開く（ブラウザはボタンを押さないとクリップボードに書かせない）。
   // draft（返信）：PC はその下書きがあるスレッド（#all/<スレッドID>）を開く。前のやり取りの下に返信の下書きが出る。
@@ -302,10 +303,12 @@
         var thread = gmailThreadUrl(d);
         href = isMobile ? GMAIL_APP : (thread || d.href);
         howto = isMobile
-          ? "Gmail アプリが開いたら、メニューの「下書き」から返信の下書き（宛先・件名は入っています）を開き、本文に貼り付けてください。"
+          ? "Gmail アプリが開いたら、メニューの「下書き」から返信の下書き（宛先・件名は入っています）を開き、本文の【…】の2行を選んで貼り付けてください。"
           : thread
-            ? "メールのスレッドが開きます。いちばん下の返信の下書き（宛先・件名は入っています）を押し、本文に貼り付けてください（⌘V / Ctrl+V）。"
-            : "返信の下書き（宛先・件名は入っています）が開きます。本文をクリックして貼り付けてください（⌘V / Ctrl+V）。";
+            ? "メールのスレッドが開きます。いちばん下の返信の下書き（宛先・件名は入っています）を押し、本文の【…】の2行を選んで貼り付けてください（⌘V / Ctrl+V）。"
+            : "返信の下書き（宛先・件名は入っています）が開きます。本文の【…】の2行を選んで貼り付けてください（⌘V / Ctrl+V）。";
+        // ※本文の【…】の2行：ai-ops が下書きに入れる目印（「【URL が入るため、Notion の文面を貼る。この2行を消してから送る】」と
+        //   タスクの Notion の URL）。上書きで消してもらう（ai-ops の src/ai_ops/gmail_link.py の DRAFT_PLACEHOLDER）
         if (!isMobile && thread) {
           var only = document.createElement("a");
           only.href = d.href; only.textContent = "下書きだけを開く";
