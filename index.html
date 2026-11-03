@@ -150,7 +150,9 @@
   // Google の転送用URL（google.com/url?q=…）に書き換えるので、AI は本文が空の下書きだけを作り、文面はここで人に貼ってもらう。
   // 文面は deflate（raw）で縮めた base64url を # の後ろ（z=）に入れる（# の後ろはサーバーに送られない）。
   // ボタン1回で文面をコピーして開く（ブラウザはボタンを押さないとクリップボードに書かせない）。
-  // draft（返信）：PC は下書きの URL（スレッドで返信の欄が開く）。スマホは Gmail アプリを開くだけ
+  // draft（返信）：PC はその下書きがあるスレッド（#all/<スレッドID>）を開く。前のやり取りの下に返信の下書きが出る。
+  //   下書きの URL（#all?compose=thread-f:<10進>+msg-a:…）をそのまま開くと、新規メールのウィンドウで開いてしまう（2026-11-03 森さん）。
+  //   スレッドID は thread-f の数字を16進にしたもの。取り出せなければ下書きの URL を開く。スマホは Gmail アプリを開くだけ
   //   （アプリでスレッド・下書きを直接開くリンクはない。2026-11-03 に iPhone で試した）。人が「下書き」から開いて貼る。
   // mto（新しく送るメール）：PC は Gmail の作成画面、スマホは Gmail アプリの作成画面を、宛先・件名・本文入りで開く。
   var GMAIL_DRAFT_HOST = /^mail\.google\.com$/;
@@ -267,6 +269,13 @@
     return new Response(stream).text();
   }
 
+  // 下書きの URL から、そのスレッドを開く URL を作る（できなければ null）
+  function gmailThreadUrl(d) {
+    var m = decodeURIComponent(d.hash).match(/thread-f:(\d+)/);
+    if (!m || typeof BigInt === "undefined") return null;
+    return d.origin + d.pathname + d.search + "#all/" + BigInt(m[1]).toString(16);
+  }
+
   function showGmail() {
     var z = (location.hash.match(/[#&]z=([A-Za-z0-9_-]+)/) || [])[1];
     var draft = params.get("draft") || "";
@@ -290,10 +299,18 @@
     unpackText(z).then(function (text) {
       var href, howto;
       if (draft) {
-        href = isMobile ? GMAIL_APP : d.href;
+        var thread = gmailThreadUrl(d);
+        href = isMobile ? GMAIL_APP : (thread || d.href);
         howto = isMobile
           ? "Gmail アプリが開いたら、メニューの「下書き」から返信の下書き（宛先・件名は入っています）を開き、本文に貼り付けてください。"
-          : "スレッドの下に返信の欄が開きます（宛先・件名は入っています）。本文をクリックして貼り付けてください（⌘V / Ctrl+V）。";
+          : thread
+            ? "メールのスレッドが開きます。いちばん下の返信の下書き（宛先・件名は入っています）を押し、本文に貼り付けてください（⌘V / Ctrl+V）。"
+            : "返信の下書き（宛先・件名は入っています）が開きます。本文をクリックして貼り付けてください（⌘V / Ctrl+V）。";
+        if (!isMobile && thread) {
+          var only = document.createElement("a");
+          only.href = d.href; only.textContent = "下書きだけを開く";
+          alt.append("スレッドに下書きが見当たらないときは ", only);
+        }
       } else if (isMobile) {
         href = GMAIL_APP + "/co?to=" + encodeURIComponent(mto) + (cc ? "&cc=" + encodeURIComponent(cc) : "") +
           "&subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(text);
